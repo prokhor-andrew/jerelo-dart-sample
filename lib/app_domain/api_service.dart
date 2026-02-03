@@ -2,6 +2,7 @@ import 'package:jerelo/jerelo.dart';
 import 'package:jerelo_sample/app_domain/dto/auth_user.dart';
 import 'package:jerelo_sample/app_domain/dto/config.dart';
 import 'package:jerelo_sample/app_domain/dto/sign_in_creds.dart';
+import 'package:jerelo_sample/utils/utils.dart';
 
 final class ApiService {
   final Cont<Config> Function() getConfig;
@@ -49,13 +50,13 @@ extension DomainFlowsExtension on ApiService {
 
   Cont<Never> getMealsFlow() {
     return Cont.fromDeferred(() {
-      return getMealsTrigger().then0(getMeals).then(showMeals).then0(getMealsFlow);
+      return getMealsTrigger().then0(getMeals).then(showMeals).logOnValue('test').then0(getMealsFlow);
     });
   }
 
   Cont<Never> anonUserAppFlow() {
     return getSignInCreds()
-        .thenTap(validateCreds)
+        .tap(validateCreds)
         .then(signIn)
         .map(_tokenFromLoggedUser)
         //
@@ -63,7 +64,15 @@ extension DomainFlowsExtension on ApiService {
   }
 
   Cont<Never> loggedUserAppFlow(String token) {
-    return getSignOutTrigger().then0(signOut).then0(anonUserAppFlow).raceForWinnerWith(getMealsFlow());
+    return getSignOutTrigger()
+        .then0(signOut)
+        .then0(anonUserAppFlow)
+        .or(
+          getMealsFlow(),
+          (errors1, errors2) => errors1 + errors2,
+          policy: ContPolicy.mergeWhenAll((a, b) => a as Never),
+          //
+        );
   }
 }
 

@@ -38,7 +38,7 @@ final class _MyAppState extends State<MyAppWidget> {
           }
           return Cont.of(value);
         })
-        .thenFork((event) {
+        .fork((event) {
           return Cont.fromRun<()>((observer) {
             handleUiInput(event);
             observer.onValue(());
@@ -148,6 +148,7 @@ final class _MyAppState extends State<MyAppWidget> {
               //
             ),
 
+            // comment
             Text("MEALS:  $_meals"),
           ],
         ),

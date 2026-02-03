@@ -16,10 +16,11 @@ Cont<ApiService> getAppApi() {
       getStoreServer(),
       getHttpServer(),
       (store, http) => (store, http),
+      policy: ContPolicy.mergeWhenAll((errors1, errors2) => errors1 + errors2),
       //
     );
 
-    final servers = getUiServer().zipTo(storeAndHttp, (ui, servers) => (ui, servers));
+    final servers = getUiServer().zip0(() => storeAndHttp, (ui, servers) => (ui, servers));
 
     return servers.then((servers) {
       final (ui, (store, http)) = servers;
@@ -106,7 +107,7 @@ Cont<ApiService> getAppApi() {
               }).toList();
 
               return meals;
-            }).orElse((errors) {
+            }).elseThen((errors) {
               return Cont.of(<String>[]);
             });
           },

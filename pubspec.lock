@@ -221,7 +221,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "24f5581933fd17048c25d1753ae230c1e5c873fb"
+      resolved-ref: "1bbec222446eff20a87a7e0c99f5a7d06458beba"
       url: "https://github.com/prokhor-andrew/jerelo-dart"
     source: git
     version: "1.0.0"
