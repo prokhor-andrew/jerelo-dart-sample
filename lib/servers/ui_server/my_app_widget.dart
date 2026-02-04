@@ -31,21 +31,22 @@ final class _MyAppState extends State<MyAppWidget> {
   void initState() {
     super.initState();
 
-    widget.bridge.dequeue
-        .then((value) {
+    widget.bridge
+        .dequeue()
+        .thenDo((value) {
           if (_isDisposed) {
-            return Cont.terminate<UiInput>();
+            return Cont.terminate<(), UiInput>();
           }
           return Cont.of(value);
         })
-        .fork((event) {
-          return Cont.fromRun<()>((observer) {
+        .thenFork((event) {
+          return Cont.fromRun<(), ()>((runtime, observer) {
             handleUiInput(event);
             observer.onValue(());
           });
         })
         .forever()
-        .trap((errors) {
+        .trap((), (errors) {
           print("MyAppWidget ui loop terminated, errors=$errors");
         });
   }
@@ -108,7 +109,7 @@ final class _MyAppState extends State<MyAppWidget> {
           children: [
             MaterialButton(
               onPressed: () {
-                widget.bridge.enqueue(GetMealsTriggerUiOutput()).ff();
+                widget.bridge.enqueue(GetMealsTriggerUiOutput()).ff(());
               },
               child: Text(_showRefreshButton ? "Refresh" : ""),
             ),
@@ -124,7 +125,7 @@ final class _MyAppState extends State<MyAppWidget> {
                           ),
                           //
                         )
-                        .ff();
+                        .ff(());
                   } else {
                     widget.bridge
                         .enqueue(
@@ -134,7 +135,7 @@ final class _MyAppState extends State<MyAppWidget> {
                           ),
                           //
                         )
-                        .ff();
+                        .ff(());
                   }
                 }
               },

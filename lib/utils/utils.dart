@@ -1,33 +1,38 @@
 import 'package:jerelo/jerelo.dart';
 
-Cont<T> fromFutureComp<T>(Future<T> Function() f) {
-  return Cont.fromRun((observer) {
-    f().then(observer.onValue).catchError((error, st) {
-      observer.onTerminate([ContError(error, st)]);
+Cont<E, T> fromFutureComp<E, T>(Future<T> Function(ContRuntime<E> runtime) f, T Function(Object error, StackTrace st) catchError) {
+  return Cont.fromRun((runtime, observer) {
+    f(runtime).then(observer.onValue).catchError((error, st) {
+      try {
+        observer.onValue(catchError(error, st));
+      } catch (error, st) {
+        observer.onTerminate([ContError(error, st)]);
+      }
     });
   });
 }
 
-extension ContScheduling<T> on Cont<T> {
-  Cont<T> subscribeOnMicrotask() {
-    return hoist((run, observer) {
+extension ContScheduling<E, T> on Cont<E, T> {
+  Cont<E, T> subscribeOnMicrotask() {
+    return hoist((run, runtime, observer) {
       Future.microtask(() {
-        run(observer);
+        run(runtime, observer);
       });
     });
   }
 
-  Cont<T> subscribeOnDelayed([Duration duration = Duration.zero]) {
-    return hoist((run, observer) {
+  Cont<E, T> subscribeOnDelayed([Duration duration = Duration.zero]) {
+    return hoist((run, runtime, observer) {
       Future.delayed(duration, () {
-        run(observer);
+        run(runtime, observer);
       });
     });
   }
 
-  Cont<T> logOnValue(String tag) {
-    return hoist((run, observer) {
+  Cont<E, T> logOnValue(String tag) {
+    return hoist((run, runtime, observer) {
       run(
+        runtime,
         observer.copyUpdateOnValue((a) {
           print('$tag $a');
           observer.onValue(a);

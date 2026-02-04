@@ -1,86 +1,206 @@
+import 'package:dio/dio.dart';
 import 'package:jerelo/jerelo.dart';
 import 'package:jerelo_sample/app_domain/dto/auth_user.dart';
 import 'package:jerelo_sample/app_domain/dto/config.dart';
 import 'package:jerelo_sample/app_domain/dto/sign_in_creds.dart';
+import 'package:jerelo_sample/app_domain/dto/theme_config.dart';
+import 'package:jerelo_sample/servers/ui_server/ui_input.dart';
+import 'package:jerelo_sample/servers/ui_server/ui_output.dart';
+import 'package:jerelo_sample/servers/ui_server/ui_server.dart';
 import 'package:jerelo_sample/utils/utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final class ApiService {
-  final Cont<Config> Function() getConfig;
-
-  final Cont<()> Function(Config config) setConfig;
-
-  final Cont<AuthUser> Function() getAuthUser;
-
-  final Cont<SignInCreds> Function() getSignInCreds;
-
-  final Cont<bool> Function(SignInCreds creds) validateCreds;
-
-  final Cont<LoggedUser> Function(SignInCreds creds) signIn;
-
-  final Cont<()> Function() getSignOutTrigger;
-
-  final Cont<AnonUser> Function() signOut;
-
-  final Cont<()> Function() getMealsTrigger;
-
-  final Cont<List<String>> Function() getMeals;
-
-  final Cont<()> Function(List<String> meals) showMeals;
+  final Dio http;
+  final Bridge<UiInput, UiOutput> ui;
+  final SharedPreferences store;
 
   const ApiService({
-    required this.getConfig,
-    required this.setConfig,
-    required this.getAuthUser,
-    required this.getSignInCreds,
-    required this.validateCreds,
-    required this.signIn,
-    required this.getSignOutTrigger,
-    required this.signOut,
-    required this.getMealsTrigger,
-    required this.getMeals,
-    required this.showMeals,
+    required this.http,
+    required this.ui,
+    required this.store,
     //
   });
 }
 
-extension DomainFlowsExtension on ApiService {
-  String _tokenFromLoggedUser(LoggedUser user) {
-    return user.token;
-  }
-
-  Cont<Never> getMealsFlow() {
-    return Cont.fromDeferred(() {
-      return getMealsTrigger().then0(getMeals).then(showMeals).logOnValue('test').then0(getMealsFlow);
-    });
-  }
-
-  Cont<Never> anonUserAppFlow() {
-    return getSignInCreds()
-        .tap(validateCreds)
-        .then(signIn)
-        .map(_tokenFromLoggedUser)
-        //
-        .then(loggedUserAppFlow);
-  }
-
-  Cont<Never> loggedUserAppFlow(String token) {
-    return getSignOutTrigger()
-        .then0(signOut)
-        .then0(anonUserAppFlow)
-        .or(
-          getMealsFlow(),
-          (errors1, errors2) => errors1 + errors2,
-          policy: ContPolicy.mergeWhenAll((a, b) => a as Never),
-          //
-        );
-  }
+Cont<ApiService, Config> getConfig() {
+  return Cont.ask<ApiService>().map((service) => service.store).thenDo((store) {
+    return fromFutureComp(
+      (runtime) async {
+        final isLightTheme = store.getBool('is_light_theme') ?? true;
+        return isLightTheme ? const Config(ThemeConfig.light) : const Config(ThemeConfig.dark);
+      },
+      (error, st) {
+        return const Config(ThemeConfig.light);
+      },
+    );
+  });
 }
 
-Cont<Never> program(ApiService service) {
-  return service.getConfig().then(service.setConfig).then0(service.getAuthUser).then((authUser) {
+Cont<ApiService, ()> setConfig(Config config) {
+  return Cont.ask<ApiService>().map((service) => service.ui).thenDo((ui) {
+    return ui.enqueue(SetConfigUiInput(config.theme));
+  });
+}
+
+Cont<ApiService, AuthUser> getAuthUser() {
+  return Cont.ask<ApiService>().map((service) => service.store).thenDo((store) {
+    return fromFutureComp(
+      (runtime) async {
+        final token = store.getString("user_token");
+
+        if (token == null) {
+          return AnonUser();
+        }
+
+        return LoggedUser(token);
+      },
+      (error, st) {
+        return AnonUser();
+      },
+    );
+  });
+}
+
+Cont<ApiService, SignInCreds> getSignInCreds() {
+  return Cont.ask<ApiService>().map((service) => service.ui).thenDo((ui) {
+    return ui.enqueue<ApiService>(GetSignInCredsUiInput()).thenDo0(() {
+      return ui
+          .dequeue<ApiService>()
+          .until((output) {
+            return output is GetSignInCredsUiOutput;
+          })
+          .map((output) {
+            return (output as GetSignInCredsUiOutput).creds;
+          });
+    });
+  });
+}
+
+Cont<ApiService, bool> validateCreds(SignInCreds creds) {
+  return Cont.fromDeferred(() {
+    return Cont.of(creds.email.isNotEmpty && creds.password.isNotEmpty);
+  });
+}
+
+Cont<ApiService, LoggedUser> signIn(SignInCreds creds) {
+  return Cont.ask<ApiService>().map((service) => service.store).thenDo((store) {
+    return fromFutureComp(
+      (runtime) async {
+        final token = creds.email + creds.password;
+        await store.setString("user_token", token);
+        return LoggedUser(token);
+      },
+      (error, st) {
+        throw "Not Logged";
+      },
+    );
+  });
+}
+
+Cont<ApiService, ()> getSignOutTrigger() {
+  return Cont.ask<ApiService>().map((service) => service.ui).thenDo((ui) {
+    return ui
+        .enqueue<ApiService>(GetSignOutTriggerUiInput())
+        .thenDo0(() {
+          return ui.dequeue<ApiService>().until((output) {
+            return output is GetSignOutTriggerUiOutput;
+          });
+        })
+        .as(());
+  });
+}
+
+Cont<ApiService, AnonUser> signOut() {
+  return Cont.ask<ApiService>().map((service) => service.store).thenDo((store) {
+    return fromFutureComp(
+      (runtime) async {
+        await store.remove("user_token");
+        return AnonUser();
+      },
+      (error, st) {
+        return AnonUser();
+      },
+    );
+  });
+}
+
+Cont<ApiService, ()> getMealsTrigger() {
+  return Cont.ask<ApiService>().map((service) => service.ui).thenDo((ui) {
+    return ui
+        .enqueue<ApiService>(GetMealsTriggerUiInput())
+        .thenDo0(() {
+          return ui.dequeue<ApiService>().until((output) {
+            return output is GetMealsTriggerUiOutput;
+          });
+        })
+        .as(());
+  });
+}
+
+Cont<ApiService, List<String>> getMeals() {
+  return Cont.ask<ApiService>().thenDo((service) {
+    return fromFutureComp(
+      (runtime) async {
+        final result = await service.http.get('search.php', queryParameters: {'s': 'Arrabiata'});
+
+        final List<dynamic> list = result.data['meals'];
+
+        final meals = list.map((item) {
+          return item['strMeal'] as String;
+        }).toList();
+
+        return meals;
+      },
+      (error, st) {
+        return <String>[];
+      },
+    );
+  });
+}
+
+Cont<ApiService, ()> showMeals(List<String> meals) {
+  return Cont.ask<ApiService>().thenDo((service) {
+    return service.ui.enqueue(ShowMealsUiInput(meals));
+  });
+}
+
+Cont<ApiService, Never> getMealsFlow() {
+  return Cont.fromDeferred(() {
+    return getMealsTrigger().thenDo0(getMeals).thenDo(showMeals).thenDo0(getMealsFlow);
+  });
+}
+
+String _tokenFromLoggedUser(LoggedUser user) {
+  return user.token;
+}
+
+Cont<ApiService, Never> anonUserAppFlow() {
+  return getSignInCreds()
+      .thenTap(validateCreds)
+      .thenDo(signIn)
+      .map(_tokenFromLoggedUser)
+      //
+      .thenDo(loggedUserAppFlow);
+}
+
+Cont<ApiService, Never> loggedUserAppFlow(String token) {
+  return getSignOutTrigger()
+      .thenDo0(signOut)
+      .thenDo0(anonUserAppFlow)
+      .or(
+        getMealsFlow(),
+        (errors1, errors2) => errors1 + errors2,
+        policy: ContPolicy.mergeWhenAll((a, b) => a as Never),
+        //
+      );
+}
+
+Cont<ApiService, Never> program() {
+  return getConfig().thenDo(setConfig).thenDo0(getAuthUser).thenDo((authUser) {
     return switch (authUser) {
-      AnonUser() => service.anonUserAppFlow(),
-      LoggedUser(token: final token) => service.loggedUserAppFlow(token),
+      AnonUser() => anonUserAppFlow(),
+      LoggedUser(token: final token) => loggedUserAppFlow(token),
     };
   });
 }

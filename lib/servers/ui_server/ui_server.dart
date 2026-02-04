@@ -5,8 +5,8 @@ import 'package:jerelo_sample/servers/ui_server/ui_input.dart';
 import 'package:jerelo_sample/servers/ui_server/ui_output.dart';
 
 final class Bridge<I, O> {
-  final Cont<()> Function(I) enqueue;
-  final Cont<O> dequeue;
+  final Cont<E, ()> Function<E>(I) enqueue;
+  final Cont<E, O> Function<E>() dequeue;
 
   const Bridge._({
     required this.enqueue,
@@ -15,22 +15,30 @@ final class Bridge<I, O> {
   });
 }
 
-Cont<(Bridge<I, O>, Bridge<O, I>)> bridges<I, O>() {
-  return Cont.fromRun((observer) {
+Cont<E, (Bridge<I, O>, Bridge<O, I>)> bridges<E, I, O>() {
+  return Cont.fromRun((runtime, observer) {
     final RendezvousQueue<I> queue1 = RendezvousQueue();
     final RendezvousQueue<O> queue2 = RendezvousQueue();
 
-    final bridge1 = Bridge._(enqueue: queue1.enqueue, dequeue: queue2.dequeue);
-    final bridge2 = Bridge._(enqueue: queue2.enqueue, dequeue: queue1.dequeue);
+    final bridge1 = Bridge<I, O>._(enqueue: <V>(val) {
+      return queue1.enqueue(val);
+    }, dequeue: <V> () {
+      return queue2.dequeue();
+    });
+    final bridge2 = Bridge<O, I>._(enqueue: <V>(val) {
+      return queue2.enqueue(val);
+    }, dequeue: <V> () {
+      return queue1.dequeue();
+    });
 
     observer.onValue((bridge1, bridge2));
   });
 }
 
-Cont<Bridge<UiInput, UiOutput>> getUiServer() {
-  return bridges<UiOutput, UiInput>().then((bridges) {
+Cont<E, Bridge<UiInput, UiOutput>> getUiServer<E>() {
+  return bridges<E, UiOutput, UiInput>().thenDo((bridges) {
     final (bridge1, bridge2) = bridges;
-    return Cont.fromRun((observer) {
+    return Cont.fromRun((runtime, observer) {
       runApp(MyAppWidget(bridge1));
       observer.onValue(bridge2);
     });
@@ -41,8 +49,8 @@ final class RendezvousQueue<T> {
   final List<ContObserver<T>> waiters = [];
   final List<(ContObserver<()>, T)> providers = [];
 
-  Cont<()> enqueue(T value) {
-    return Cont.fromRun((observer) {
+  Cont<E, ()> enqueue<E>(T value) {
+    return Cont.fromRun((runtime, observer) {
       if (waiters.isEmpty) {
         providers.add((observer, value));
         return;
@@ -57,7 +65,7 @@ final class RendezvousQueue<T> {
     });
   }
 
-  Cont<T> get dequeue => Cont.fromRun((observer) {
+  Cont<E, T> dequeue<E>() => Cont.fromRun((runtime, observer) {
     if (providers.isEmpty) {
       waiters.add(observer);
       return;
