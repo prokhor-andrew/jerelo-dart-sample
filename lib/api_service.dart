@@ -184,7 +184,7 @@ Cont<ApiService, Never> anonUserAppFlow() {
 
 Cont<ApiService, Never> loggedUserAppFlow(String token) {
   return getSignOutTrigger().thenDo0(signOut).or(
-    getMealsFlow().absurd(),
+    getMealsFlow(),
     mergeLists,
     policy: ContPolicy.quitFast(),
     //
