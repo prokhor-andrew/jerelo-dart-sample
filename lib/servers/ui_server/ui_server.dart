@@ -20,16 +20,22 @@ Cont<E, (Bridge<I, O>, Bridge<O, I>)> bridges<E, I, O>() {
     final RendezvousQueue<I> queue1 = RendezvousQueue();
     final RendezvousQueue<O> queue2 = RendezvousQueue();
 
-    final bridge1 = Bridge<I, O>._(enqueue: <V>(val) {
-      return queue1.enqueue(val);
-    }, dequeue: <V> () {
-      return queue2.dequeue();
-    });
-    final bridge2 = Bridge<O, I>._(enqueue: <V>(val) {
-      return queue2.enqueue(val);
-    }, dequeue: <V> () {
-      return queue1.dequeue();
-    });
+    final bridge1 = Bridge<I, O>._(
+      enqueue: <V>(val) {
+        return queue1.enqueue(val);
+      },
+      dequeue: <V>() {
+        return queue2.dequeue();
+      },
+    );
+    final bridge2 = Bridge<O, I>._(
+      enqueue: <V>(val) {
+        return queue2.enqueue(val);
+      },
+      dequeue: <V>() {
+        return queue1.dequeue();
+      },
+    );
 
     observer.onValue((bridge1, bridge2));
   });

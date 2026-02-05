@@ -77,6 +77,7 @@ final class _MyAppState extends State<MyAppWidget> {
       setState(() {
         _isSignedIn = false;
         _showRefreshButton = false;
+        _meals = "";
       });
     }
 

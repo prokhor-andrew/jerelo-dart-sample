@@ -166,9 +166,7 @@ Cont<ApiService, ()> showMeals(List<String> meals) {
 }
 
 Cont<ApiService, Never> getMealsFlow() {
-  return Cont.fromDeferred(() {
-    return getMealsTrigger().thenDo0(getMeals).thenDo(showMeals).thenDo0(getMealsFlow);
-  });
+  return getMealsTrigger().thenDo0(getMeals).thenDo(showMeals).thenDo0(getMealsFlow);
 }
 
 String _tokenFromLoggedUser(LoggedUser user) {
@@ -185,15 +183,12 @@ Cont<ApiService, Never> anonUserAppFlow() {
 }
 
 Cont<ApiService, Never> loggedUserAppFlow(String token) {
-  return getSignOutTrigger()
-      .thenDo0(signOut)
-      .thenDo0(anonUserAppFlow)
-      .or(
-        getMealsFlow(),
-        (errors1, errors2) => errors1 + errors2,
-        policy: ContPolicy.mergeWhenAll((a, b) => a as Never),
-        //
-      );
+  return getSignOutTrigger().thenDo0(signOut).or(
+    getMealsFlow().absurd(),
+    mergeErrors,
+    policy: ContPolicy.quitFast(),
+    //
+  ).thenDo0(anonUserAppFlow);
 }
 
 Cont<ApiService, Never> program() {
