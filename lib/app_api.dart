@@ -11,7 +11,7 @@ Cont<(), ApiService> getAppApi() {
       getStoreServer(),
       getHttpServer(),
       (store, http) => (store, http),
-      policy: ContPolicy.mergeWhenAll(mergeErrors),
+      policy: ContPolicy.mergeWhenAll(mergeLists),
       //
     );
 

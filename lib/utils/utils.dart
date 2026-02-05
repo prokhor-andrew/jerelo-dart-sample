@@ -43,6 +43,6 @@ extension ContScheduling<E, T> on Cont<E, T> {
 }
 
 
-List<ContError> mergeErrors(List<ContError> errors1, List<ContError> errors2) {
-  return errors1 + errors2;
+List<T> mergeLists<T>(List<T> list1, List<T> list2) {
+  return list1 + list2;
 }
